@@ -3,16 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <title>Mini Jump 'n' Run – Mobile v2</title>
+  <title>Mini Jump 'n' Run – Mobile v3</title>
   <style>
     :root { --ui-h: 120px; }
     html, body { margin: 0; height: 100%; background:#111; color:#eee; font-family: system-ui, Arial, sans-serif; overscroll-behavior: none; }
     #wrap { display:flex; flex-direction:column; height:100vh; width:100vw; overflow:hidden; }
     #status { padding:8px 10px; font-weight:600; font-size:16px; text-align:center; background:#111; }
     #stageWrap { flex:1; position:relative; }
-    canvas { position:absolute; inset:0; width:100%; height:100%;
-             background: linear-gradient(#78c0ff, #b1e1ff 40%, #87d37c 40%, #6ab04c);
-             border-top:2px solid #222; border-bottom:2px solid #222; image-rendering: pixelated; }
+    canvas { position:absolute; inset:0; width:100%; height:100%; border-top:2px solid #222; border-bottom:2px solid #222; image-rendering: pixelated; background:#78c0ff; }
     #controls { display:flex; gap:10px; align-items:stretch; justify-content:space-between;
                 padding:10px; background:#222; height: var(--ui-h); box-sizing: border-box; }
     .btn { background:#444; color:#fff; border:none; border-radius:14px; font-size:22px; flex:1;
@@ -39,48 +37,43 @@
   const ctx = canvas.getContext('2d');
   const status = document.getElementById('status');
 
-  // ----- HiDPI/Scaling-Fix -----
   function resizeCanvas(){
     const dpr = Math.max(1, Math.min(2.5, window.devicePixelRatio || 1));
     const rect = canvas.getBoundingClientRect();
     canvas.width  = Math.floor(rect.width * dpr);
     canvas.height = Math.floor(rect.height * dpr);
-    ctx.setTransform(dpr,0,0,dpr,0,0); // in CSS-Pixeln zeichnen
+    ctx.setTransform(dpr,0,0,dpr,0,0);
   }
   window.addEventListener('resize', resizeCanvas);
   resizeCanvas();
 
-  // Logische Weltgröße (unabhängig von Bildschirm)
   const W = 900, H = 500;
-
   const GRAV = 0.8, FRICTION = 0.85, SPEED = 0.9, MAX_VX = 5.2, JUMP_VY = -13.2;
 
   const keys = new Set();
-  const pressKey   = k => keys.add(k);
+  const pressKey = k => keys.add(k);
   const releaseKey = k => keys.delete(k);
 
-  // Touch-Buttons
   const btnLeft  = document.getElementById('left');
   const btnRight = document.getElementById('right');
   const btnJump  = document.getElementById('jump');
   const passive = {passive:false};
-  btnLeft .addEventListener('touchstart', e=>{e.preventDefault(); pressKey('left'); }, passive);
-  btnLeft .addEventListener('touchend',   e=>{e.preventDefault(); releaseKey('left');}, passive);
-  btnRight.addEventListener('touchstart', e=>{e.preventDefault(); pressKey('right');}, passive);
-  btnRight.addEventListener('touchend',   e=>{e.preventDefault(); releaseKey('right');}, passive);
-  btnJump .addEventListener('touchstart', e=>{e.preventDefault(); pressKey('jump'); }, passive);
-  btnJump .addEventListener('touchend',   e=>{e.preventDefault(); releaseKey('jump');}, passive);
+  btnLeft.addEventListener('touchstart', e=>{e.preventDefault(); pressKey('left');}, passive);
+  btnLeft.addEventListener('touchend',   e=>{e.preventDefault(); releaseKey('left');}, passive);
+  btnRight.addEventListener('touchstart',e=>{e.preventDefault(); pressKey('right');}, passive);
+  btnRight.addEventListener('touchend',  e=>{e.preventDefault(); releaseKey('right');}, passive);
+  btnJump.addEventListener('touchstart', e=>{e.preventDefault(); pressKey('jump');}, passive);
+  btnJump.addEventListener('touchend',   e=>{e.preventDefault(); releaseKey('jump');}, passive);
 
-  // Keyboard-Fallback
   window.addEventListener('keydown', e => {
     if (e.key.toLowerCase() === 'a' || e.key === 'ArrowLeft')  pressKey('left');
     if (e.key.toLowerCase() === 'd' || e.key === 'ArrowRight') pressKey('right');
-    if ([' ', 'w', 'ArrowUp'].includes(e.key))                  pressKey('jump');
+    if ([' ', 'w', 'ArrowUp'].includes(e.key))                 pressKey('jump');
   });
   window.addEventListener('keyup', e => {
     if (e.key.toLowerCase() === 'a' || e.key === 'ArrowLeft')  releaseKey('left');
     if (e.key.toLowerCase() === 'd' || e.key === 'ArrowRight') releaseKey('right');
-    if ([' ', 'w', 'ArrowUp'].includes(e.key))                  releaseKey('jump');
+    if ([' ', 'w', 'ArrowUp'].includes(e.key))                 releaseKey('jump');
   });
 
   const level = {
@@ -108,92 +101,80 @@
     if (camX < 0) camX = 0;
   }
 
-  const player = { x: level.spawn.x, y: level.spawn.y, w: 28, h: 36, vx: 0, vy: 0, onGround: false, canDouble: true, facing: 1 };
+  const player = {x:level.spawn.x, y:level.spawn.y, w:28, h:36, vx:0, vy:0, onGround:false, canDouble:true, facing:1};
   let win = false, startTime = performance.now(), timeMs = 0;
 
-  function reset() {
+  function reset(){
     Object.assign(player, {x:level.spawn.x, y:level.spawn.y, vx:0, vy:0, onGround:false, canDouble:true});
     camX = 0; win = false; startTime = performance.now();
     level.enemy.x = level.enemy.minX; level.enemy.dir = 1;
   }
 
-  function handleInput() {
-    const left  = keys.has('left');
-    const right = keys.has('right');
-    const jump  = keys.has('jump');
-
-    if (left && !right)  { player.vx -= SPEED; player.facing = -1; }
-    if (right && !left)  { player.vx += SPEED; player.facing =  1; }
-    if (!(left ^ right)) { player.vx *= FRICTION; if (Math.abs(player.vx) < 0.05) player.vx = 0; }
-
+  function handleInput(){
+    const left = keys.has('left'), right = keys.has('right'), jump = keys.has('jump');
+    if (left && !right){ player.vx -= SPEED; player.facing = -1; }
+    if (right && !left){ player.vx += SPEED; player.facing = 1; }
+    if (!(left ^ right)){ player.vx *= FRICTION; if (Math.abs(player.vx) < 0.05) player.vx = 0; }
     player.vx = Math.max(-MAX_VX, Math.min(MAX_VX, player.vx));
-
-    if (jump && player.onGround) {
-      player.vy = JUMP_VY; player.onGround = false; player.canDouble = true;
-    } else if (jump && !player.onGround && player.canDouble) {
-      player.vy = JUMP_VY * 0.9; player.canDouble = false;
-    }
+    if (jump && player.onGround){ player.vy = JUMP_VY; player.onGround = false; player.canDouble = true; }
+    else if (jump && !player.onGround && player.canDouble){ player.vy = JUMP_VY * 0.9; player.canDouble = false; }
   }
 
   function rectsOverlap(a,b){ return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
 
-  function physics() {
+  function physics(){
     player.vy += GRAV;
-
-    // X
     player.x += player.vx;
-    for (const p of level.platforms) {
-      if (rectsOverlap(player, p)) {
+    for (const p of level.platforms){
+      if (rectsOverlap(player, p)){
         if (player.vx > 0) player.x = p.x - player.w;
         else if (player.vx < 0) player.x = p.x + p.w;
         player.vx = 0;
       }
     }
-
-    // Y
     player.y += player.vy;
     player.onGround = false;
-    for (const p of level.platforms) {
-      if (rectsOverlap(player, p)) {
-        if (player.vy > 0) { player.y = p.y - player.h; player.vy = 0; player.onGround = true; }
-        else if (player.vy < 0) { player.y = p.y + p.h; player.vy = 0; }
+    for (const p of level.platforms){
+      if (rectsOverlap(player, p)){
+        if (player.vy > 0){ player.y = p.y - player.h; player.vy = 0; player.onGround = true; }
+        else if (player.vy < 0){ player.y = p.y + p.h; player.vy = 0; }
       }
     }
+    if (player.y > H+200) reset();
 
-    if (player.y > H + 200) reset();
-
-    // Enemy
     const e = level.enemy;
     e.x += e.speed * e.dir;
-    if (e.x < e.minX) { e.x = e.minX; e.dir = 1; }
-    if (e.x + e.w > e.maxX) { e.x = e.maxX - e.w; e.dir = -1; }
-
-    if (rectsOverlap(player, e)) {
-      if (player.vy > 2 && player.y + player.h - e.y < 16) {
+    if (e.x < e.minX){ e.x = e.minX; e.dir = 1; }
+    if (e.x + e.w > e.maxX){ e.x = e.maxX - e.w; e.dir = -1; }
+    if (rectsOverlap(player, e)){
+      if (player.vy > 2 && player.y + player.h - e.y < 16){
         e.x = -9999; e.w = 0; e.h = 0; player.vy = JUMP_VY * 0.7;
       } else reset();
     }
 
-    if (rectsOverlap(player, level.goal)) { if (!win) timeMs = performance.now() - startTime; win = true; }
+    if (rectsOverlap(player, level.goal)){ if (!win) timeMs = performance.now() - startTime; win = true; }
 
     centerCameraOn(player.x);
   }
 
-  function draw() {
-    ctx.save();
-    // Welt skalieren (mit Letterboxing), damit nix verzieht
+  function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
     const rect = canvas.getBoundingClientRect();
     const scale = Math.min(rect.width / W, rect.height / H);
     const offX = Math.floor((rect.width - W*scale)/2);
     const offY = Math.floor((rect.height - H*scale)/2);
+    ctx.save();
     ctx.translate(offX, offY);
     ctx.scale(scale, scale);
 
-    // Kamera
-    ctx.translate(-Math.floor(camX), 0);
+    // Hintergrund
+    ctx.fillStyle = "#78c0ff"; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = "#b1e1ff"; ctx.fillRect(0,H*0.4,W,H*0.6);
+    ctx.fillStyle = "#87d37c"; ctx.fillRect(0,H*0.4,W,H*0.6);
+    ctx.fillStyle = "#6ab04c"; ctx.fillRect(0,H*0.8,W,H*0.2);
 
-    // Hintergrund-Hügel (etwas dicker, damit kein Moiré)
-    for (let i=0;i<6;i++) {
+    for (let i=0;i<6;i++){
       const bx = i*400;
       ctx.fillStyle = i%2? '#9be2a8' : '#8ed39b';
       ctx.beginPath();
@@ -201,25 +182,21 @@
       ctx.fill();
     }
 
-    // Plattformen
-    for (const p of level.platforms) {
+    for (const p of level.platforms){
       ctx.fillStyle = p.color || '#2ecc71';
       ctx.fillRect(Math.round(p.x), Math.round(p.y), Math.round(p.w), Math.round(p.h));
       ctx.fillStyle = '#1f8a55';
       ctx.fillRect(Math.round(p.x), Math.round(p.y), Math.round(p.w), 5);
     }
 
-    // Gegner
     const e = level.enemy;
-    if (e.w > 0) { ctx.fillStyle = '#e74c3c'; ctx.fillRect(Math.round(e.x), Math.round(e.y), e.w, e.h); }
+    if (e.w > 0){ ctx.fillStyle = '#e74c3c'; ctx.fillRect(Math.round(e.x), Math.round(e.y), e.w, e.h); }
 
-    // Goal
     const g = level.goal;
     ctx.fillStyle = '#f1c40f';
     ctx.beginPath(); ctx.arc(g.x + g.w/2, g.y + g.h/2, g.w/2, 0, Math.PI*2); ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = '#b7950b'; ctx.stroke();
 
-    // Spieler
     ctx.fillStyle = '#333';
     ctx.fillRect(Math.round(player.x), Math.round(player.y), player.w, player.h);
 
@@ -230,9 +207,7 @@
   }
 
   function loop(){ handleInput(); physics(); draw(); requestAnimationFrame(loop); }
-
-  function start(){ reset(); loop(); }
-  start();
+  reset(); loop();
 })();
 </script>
 </body>
