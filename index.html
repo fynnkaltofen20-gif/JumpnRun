@@ -1,170 +1,32 @@
+
 <!DOCTYPE html>
-<html lang="de">
+<html>
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-  <title>Jump’n’Run v5 – Live Build (Teil 1)</title>
+  <meta charset="UTF-8" />
+  <title>Retro Jump'n'Run v5 Deluxe</title>
   <style>
-    :root { --ui-h: 120px; }
-    html, body { margin:0; height:100%; background:#111; color:#fff; font-family: system-ui, Arial, sans-serif; overscroll-behavior:none; }
-    #wrap { display:flex; flex-direction:column; height:100vh; width:100vw; overflow:hidden; }
-    #status { padding:8px 10px; font-weight:600; font-size:16px; text-align:center; background:#111; }
-    #stageWrap { flex:1; position:relative; }
-    canvas { position:absolute; inset:0; width:100%; height:100%; image-rendering: pixelated; background:#000; }
-    #controls { display:flex; gap:10px; align-items:stretch; justify-content:space-between;
-                padding:10px; background:#222; height:var(--ui-h); box-sizing:border-box; }
-    .btn { background:#444; color:#fff; border:none; border-radius:14px; font-size:22px; flex:1;
-           display:flex; align-items:center; justify-content:center; user-select:none; -webkit-user-select:none; }
-    .btn:active { background:#666; }
+    html, body { margin:0; padding:0; overflow:hidden; background:#111; color:white; font-family:sans-serif; }
+    #game { width:100vw; height:100vh; display:block; background:#000; }
+    #controls { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); display:flex; gap:10px; }
+    .btn { width:60px; height:60px; background:#fff3; color:white; font-size:24px; border-radius:10px; border:none; }
+    #status { position:absolute; top:10px; left:10px; font-size:16px; background:#0007; padding:4px 8px; border-radius:5px; }
   </style>
 </head>
 <body>
-<div id="wrap">
-  <div id="status">Live-Build v5 – Teil 1 geladen…</div>
-  <div id="stageWrap">
-    <canvas id="game"></canvas>
-  </div>
+  <canvas id="game"></canvas>
+  <div id="status">Loading...</div>
   <div id="controls">
-    <button class="btn" id="left">←</button>
-    <button class="btn" id="jump">⤒</button>
-    <button class="btn" id="right">→</button>
+    <button id="left" class="btn">◀️</button>
+    <button id="jump" class="btn">⏫</button>
+    <button id="right" class="btn">▶️</button>
   </div>
-</div>
 
-<script>
-(() => {
-  // ===== Canvas Setup (HiDPI) =====
-  const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
-  const statusEl = document.getElementById('status');
-
-  function resizeCanvas(){
-    const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
-    const r = canvas.getBoundingClientRect();
-    canvas.width = Math.floor(r.width * dpr);
-    canvas.height = Math.floor(r.height * dpr);
-    ctx.setTransform(dpr,0,0,dpr,0,0); // zeichnen in CSS-Pixeln
-  }
-  window.addEventListener('resize', resizeCanvas, {passive:true});
-  resizeCanvas();
-
-  // ===== Welt-Geometrie (Logische Größe, skalieren wir später für Art) =====
-  const W = 900, H = 500;
-
-  // ===== Input: Touch + Keyboard =====
-  const keys = new Set();
-  const press = k => keys.add(k);
-  const release = k => keys.delete(k);
-
-  // Touch-Buttons
-  for (const id of ['left','right','jump']){
-    const el = document.getElementById(id);
-    el.addEventListener('touchstart', e => { e.preventDefault(); press(id); }, {passive:false});
-    el.addEventListener('touchend',   e => { e.preventDefault(); release(id); }, {passive:false});
-  }
-
-  // Keyboard
-  window.addEventListener('keydown', e => {
-    const k = e.key.toLowerCase();
-    if (k === 'arrowleft' || k === 'a') press('left');
-    if (k === 'arrowright' || k === 'd') press('right');
-    if (k === ' ' || k === 'w' || k === 'arrowup') press('jump');
-  });
-  window.addEventListener('keyup', e => {
-    const k = e.key.toLowerCase();
-    if (k === 'arrowleft' || k === 'a') release('left');
-    if (k === 'arrowright' || k === 'd') release('right');
-    if (k === ' ' || k === 'w' || k === 'arrowup') release('jump');
-  });
-
-  // ===== Platzhalter: Game State (füllen wir in Teil 2) =====
-  const state = {
-    t: 0,               // Zeit
-    scrollX: 0,         // Kamera (Endless-Runner)
-    score: 0,
-    coins: 0,
-    highscore: parseInt(localStorage.getItem('highscore') || '0'),
-  };
-
-  // ===== Helper: Welt-Skalierung auf Canvas =====
-  function withWorldTransform(drawFn){
-    const r = canvas.getBoundingClientRect();
-    const scale = Math.min(r.width / W, r.height / H);
-    const offX = Math.floor((r.width - W*scale)/2);
-    const offY = Math.floor((r.height - H*scale)/2);
-    ctx.save();
-    ctx.translate(offX, offY);
-    ctx.scale(scale, scale);
-    drawFn();
-    ctx.restore();
-  }
-
-  // ===== Draw: nur Hintergrund + HUD (Teil 1) =====
-  function drawBackground(){
-    // Himmel / Boden – simple, damit wir sofort was sehen
-    ctx.fillStyle = '#78c0ff'; ctx.fillRect(0,0,W,H);
-    ctx.fillStyle = '#87d37c'; ctx.fillRect(0, H*0.8, W, H*0.2);
-
-    // Parallax Hügel (Platzhalter)
-    ctx.fillStyle = '#9be2a8';
-    for (let i=0;i<6;i++){
-      const bx = 100 + i*200 - state.scrollX*0.15;
-      ctx.beginPath();
-      ctx.ellipse(bx, H-70, 180, 60, 0, 0, Math.PI*2);
-      ctx.fill();
-    }
-  }
-
-  function drawHUD(){
-    statusEl.textContent = `Live-Build Teil 1 | Score: ${state.score} | Coins: ${state.coins} | Highscore: ${state.highscore}`;
-  }
-
-  // ===== Game Loop (leer, nur Demo-Scroll) =====
-  function update(dt){
-    state.t += dt;
-    // nur Mini-Demo: wenn right gedrückt, scroll vor
-    if (keys.has('right')) state.scrollX += 120 * dt;
-    if (keys.has('left'))  state.scrollX -= 120 * dt;
-    if (state.scrollX < 0) state.scrollX = 0;
-  }
-
-  function render(){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    withWorldTransform(() => {
-      drawBackground();
-      // Hier kommen ab Teil 2: Plattformen/Player/Enemies/Coins etc.
-    });
-    drawHUD();
-  }
-
-  let last = performance.now();
-  function loop(now){
-    const dt = Math.min(0.033, (now - last)/1000);
-    last = now;
-    update(dt);
-    render();
-    requestAnimationFrame(loop);
-  }
-  requestAnimationFrame(loop);
-
-  console.log('Teil 1 ready. Teil 2 fügt Player/Physik/Plattformen hinzu.');
-})();
+  <script>
 (() => {
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
   const statusEl = document.getElementById('status');
 
-  function resizeCanvas(){
-    const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
-    const r = canvas.getBoundingClientRect();
-    canvas.width = Math.floor(r.width * dpr);
-    canvas.height = Math.floor(r.height * dpr);
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-  }
-  window.addEventListener('resize', resizeCanvas, {passive:true});
-  resizeCanvas();
-
-  const W = 900, H = 500;
   const keys = new Set();
   const press = k => keys.add(k);
   const release = k => keys.delete(k);
@@ -187,347 +49,73 @@
     if (k === ' ' || k === 'w' || k === 'arrowup') release('jump');
   });
 
-  const state = {
-    t: 0,
-    scrollX: 0,
-    score: 0,
-    coins: 0,
-    highscore: parseInt(localStorage.getItem('highscore') || '0'),
-    gravity: 900,
-    player: {x:100,y:0,w:30,h:40,vy:0,onGround:false},
-    platforms: []
-  };
-
-  // Beispiel-Plattformen
-  state.platforms = [
-    {x:0, y:H-50, w:2000, h:50}, // Boden
-    {x:200, y:350, w:120, h:20},
-    {x:400, y:300, w:120, h:20},
-    {x:650, y:250, w:120, h:20},
-  ];
-
-  function withWorldTransform(drawFn){
-    const r = canvas.getBoundingClientRect();
-    const scale = Math.min(r.width / W, r.height / H);
-    const offX = Math.floor((r.width - W*scale)/2);
-    const offY = Math.floor((r.height - H*scale)/2);
-    ctx.save();
-    ctx.translate(offX, offY);
-    ctx.scale(scale, scale);
-    drawFn();
-    ctx.restore();
-  }
-
-  function drawBackground(){
-    ctx.fillStyle = '#78c0ff'; ctx.fillRect(0,0,W,H);
-    ctx.fillStyle = '#87d37c'; ctx.fillRect(0, H*0.8, W, H*0.2);
-    ctx.fillStyle = '#9be2a8';
-    for (let i=0;i<6;i++){
-      const bx = 100 + i*200 - state.scrollX*0.15;
-      ctx.beginPath();
-      ctx.ellipse(bx, H-70, 180, 60, 0, 0, Math.PI*2);
-      ctx.fill();
-    }
-  }
-
-  function drawHUD(){
-    statusEl.textContent = `Score: ${state.score} | Coins: ${state.coins} | Highscore: ${state.highscore}`;
-  }
-
-  function update(dt){
-    state.t += dt;
-    const p = state.player;
-    const speed = 200;
-
-    // Bewegung
-    if (keys.has('right')) p.x += speed * dt;
-    if (keys.has('left'))  p.x -= speed * dt;
-
-    // Gravitation
-    p.vy += state.gravity * dt;
-    p.y += p.vy * dt;
-    p.onGround = false;
-
-    // Kollision Plattformen
-    for (const plat of state.platforms){
-      if (p.x < plat.x+plat.w && p.x+p.w > plat.x &&
-          p.y < plat.y+plat.h && p.y+p.h > plat.y){
-        if (p.vy > 0 && p.y+p.h - p.vy*dt <= plat.y){
-          // Landung
-          p.y = plat.y - p.h;
-          p.vy = 0;
-          p.onGround = true;
-        }
-      }
-    }
-
-    // Springen
-    if (keys.has('jump') && p.onGround){
-      p.vy = -450;
-    }
-
-    // Scroll-Kamera
-    const camCenter = state.scrollX + W/2;
-    if (p.x > camCenter) state.scrollX = p.x - W/2;
-    if (p.x < state.scrollX + 50) state.scrollX = Math.max(0, p.x - 50);
-  }
-
-  function render(){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    withWorldTransform(() => {
-      drawBackground();
-      ctx.save();
-      ctx.translate(-state.scrollX,0);
-
-      // Plattformen
-      ctx.fillStyle = '#2ecc71';
-      for (const plat of state.platforms){
-        ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
-      }
-
-      // Player
-      const p = state.player;
-      ctx.fillStyle = '#e67e22';
-      ctx.fillRect(p.x, p.y, p.w, p.h);
-
-      ctx.restore();
-    });
-    drawHUD();
-  }
-
-  let last = performance.now();
-  function loop(now){
-    const dt = Math.min(0.033, (now - last)/1000);
-    last = now;
-    update(dt);
-    render();
-    requestAnimationFrame(loop);
-  }
-  requestAnimationFrame(loop);
-})();
-(() => {
-  const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
-  const statusEl = document.getElementById('status');
-
-  function resizeCanvas(){
-    const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
-    const r = canvas.getBoundingClientRect();
-    canvas.width = Math.floor(r.width * dpr);
-    canvas.height = Math.floor(r.height * dpr);
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-  }
-  window.addEventListener('resize', resizeCanvas, {passive:true});
-  resizeCanvas();
-
   const W = 900, H = 500;
-  const keys = new Set();
-  const press = k => keys.add(k);
-  const release = k => keys.delete(k);
-
-  for (const id of ['left','right','jump']){
-    const el = document.getElementById(id);
-    el.addEventListener('touchstart', e => { e.preventDefault(); press(id); }, {passive:false});
-    el.addEventListener('touchend',   e => { e.preventDefault(); release(id); }, {passive:false});
-  }
-  window.addEventListener('keydown', e => {
-    const k = e.key.toLowerCase();
-    if (k === 'arrowleft' || k === 'a') press('left');
-    if (k === 'arrowright' || k === 'd') press('right');
-    if (k === ' ' || k === 'w' || k === 'arrowup') press('jump');
-  });
-  window.addEventListener('keyup', e => {
-    const k = e.key.toLowerCase();
-    if (k === 'arrowleft' || k === 'a') release('left');
-    if (k === 'arrowright' || k === 'd') release('right');
-    if (k === ' ' || k === 'w' || k === 'arrowup') release('jump');
-  });
-
-  const state = {
-    t: 0,
-    scrollX: 0,
-    score: 0,
-    coins: 0,
-    highscore: parseInt(localStorage.getItem('highscore') || '0'),
-    gravity: 900,
-    player: {x:100,y:0,w:30,h:40,vy:0,onGround:false, alive:true},
-    platforms: [],
-    coinsList: [],
-    enemies: [],
-    spikes: []
-  };
-
-  // Plattformen
-  state.platforms = [
+  const player = {x:100,y:0,w:32,h:48,vy:0,onGround:false,alive:true};
+  const platforms = [
     {x:0, y:H-50, w:2000, h:50},
     {x:200, y:350, w:120, h:20},
     {x:400, y:300, w:120, h:20},
     {x:650, y:250, w:120, h:20},
     {x:900, y:200, w:120, h:20}
   ];
-
-  // Coins
-  state.coinsList = [
-    {x:230, y:310, r:10},
-    {x:430, y:260, r:10},
-    {x:680, y:210, r:10}
-  ];
-
-  // Gegner
-  state.enemies = [
-    {x:500, y:H-90, w:30, h:40, dir:1, speed:50}
-  ];
-
-  // Spikes
-  state.spikes = [
-    {x:780, y:H-70, w:30, h:20}
-  ];
-
-  function withWorldTransform(drawFn){
-    const r = canvas.getBoundingClientRect();
-    const scale = Math.min(r.width / W, r.height / H);
-    const offX = Math.floor((r.width - W*scale)/2);
-    const offY = Math.floor((r.height - H*scale)/2);
-    ctx.save();
-    ctx.translate(offX, offY);
-    ctx.scale(scale, scale);
-    drawFn();
-    ctx.restore();
-  }
-
-  function drawBackground(){
-    ctx.fillStyle = '#78c0ff'; ctx.fillRect(0,0,W,H);
-    ctx.fillStyle = '#87d37c'; ctx.fillRect(0, H*0.8, W, H*0.2);
-    ctx.fillStyle = '#9be2a8';
-    for (let i=0;i<6;i++){
-      const bx = 100 + i*200 - state.scrollX*0.15;
-      ctx.beginPath();
-      ctx.ellipse(bx, H-70, 180, 60, 0, 0, Math.PI*2);
-      ctx.fill();
-    }
-  }
-
-  function drawHUD(){
-    statusEl.textContent = `Score: ${state.score} | Coins: ${state.coins} | Highscore: ${state.highscore}`;
-  }
+  const gravity = 900;
+  let scrollX = 0;
+  let last = performance.now();
 
   function update(dt){
-    if (!state.player.alive) return;
-    state.t += dt;
-    const p = state.player;
     const speed = 200;
+    if (keys.has('right')) player.x += speed * dt;
+    if (keys.has('left'))  player.x -= speed * dt;
 
-    if (keys.has('right')) p.x += speed * dt;
-    if (keys.has('left'))  p.x -= speed * dt;
+    player.vy += gravity * dt;
+    player.y += player.vy * dt;
+    player.onGround = false;
 
-    // Gravitation
-    p.vy += state.gravity * dt;
-    p.y += p.vy * dt;
-    p.onGround = false;
-
-    // Plattform-Kollision
-    for (const plat of state.platforms){
-      if (p.x < plat.x+plat.w && p.x+p.w > plat.x &&
-          p.y < plat.y+plat.h && p.y+p.h > plat.y){
-        if (p.vy > 0 && p.y+p.h - p.vy*dt <= plat.y){
-          p.y = plat.y - p.h;
-          p.vy = 0;
-          p.onGround = true;
+    for (const plat of platforms){
+      if (player.x < plat.x+plat.w && player.x+player.w > plat.x &&
+          player.y < plat.y+plat.h && player.y+player.h > plat.y){
+        if (player.vy > 0 && player.y+player.h - player.vy*dt <= plat.y){
+          player.y = plat.y - player.h;
+          player.vy = 0;
+          player.onGround = true;
         }
       }
     }
 
-    // Springen
-    if (keys.has('jump') && p.onGround){
-      p.vy = -450;
+    if (keys.has('jump') && player.onGround){
+      player.vy = -450;
     }
 
-    // Coins sammeln
-    for (let i=state.coinsList.length-1; i>=0; i--){
-      const c = state.coinsList[i];
-      if (Math.hypot((p.x+p.w/2)-(c.x), (p.y+p.h/2)-(c.y)) < c.r + p.w/2){
-        state.coins++;
-        state.score += 10;
-        state.coinsList.splice(i,1);
-      }
-    }
-
-    // Gegner bewegen
-    for (const e of state.enemies){
-      e.x += e.dir * e.speed * dt;
-      // simple patrouille
-      if (e.x < 480) e.dir = 1;
-      if (e.x > 560) e.dir = -1;
-      // Kollision Player
-      if (p.x < e.x+e.w && p.x+p.w > e.x &&
-          p.y < e.y+e.h && p.y+p.h > e.y){
-        state.player.alive = false;
-      }
-    }
-
-    // Spikes check
-    for (const s of state.spikes){
-      if (p.x < s.x+s.w && p.x+p.w > s.x &&
-          p.y < s.y+s.h && p.y+p.h > s.y){
-        state.player.alive = false;
-      }
-    }
-
-    // Kamera scroll
-    const camCenter = state.scrollX + W/2;
-    if (p.x > camCenter) state.scrollX = p.x - W/2;
-    if (p.x < state.scrollX + 50) state.scrollX = Math.max(0, p.x - 50);
+    const camCenter = scrollX + W/2;
+    if (player.x > camCenter) scrollX = player.x - W/2;
+    if (player.x < scrollX + 50) scrollX = Math.max(0, player.x - 50);
   }
 
   function render(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    withWorldTransform(() => {
-      drawBackground();
-      ctx.save();
-      ctx.translate(-state.scrollX,0);
+    const scale = Math.min(canvas.width/W, canvas.height/H);
+    const offsetX = (canvas.width - W*scale)/2;
+    const offsetY = (canvas.height - H*scale)/2;
+    ctx.save();
+    ctx.translate(offsetX, offsetY);
+    ctx.scale(scale, scale);
+    ctx.translate(-scrollX, 0);
 
-      // Plattformen
-      ctx.fillStyle = '#2ecc71';
-      for (const plat of state.platforms){
-        ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
-      }
+    ctx.fillStyle = "#87d37c";
+    ctx.fillRect(0, H-50, W*2, 50);
 
-      // Coins
-      ctx.fillStyle = 'gold';
-      for (const c of state.coinsList){
-        ctx.beginPath();
-        ctx.arc(c.x, c.y, c.r, 0, Math.PI*2);
-        ctx.fill();
-      }
+    ctx.fillStyle = "#2ecc71";
+    for (const plat of platforms){
+      ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
+    }
 
-      // Gegner
-      ctx.fillStyle = '#e74c3c';
-      for (const e of state.enemies){
-        ctx.fillRect(e.x, e.y, e.w, e.h);
-      }
+    ctx.fillStyle = "#f39c12";
+    ctx.fillRect(player.x, player.y, player.w, player.h);
 
-      // Spikes
-      ctx.fillStyle = '#bdc3c7';
-      for (const s of state.spikes){
-        ctx.beginPath();
-        ctx.moveTo(s.x, s.y+s.h);
-        ctx.lineTo(s.x+s.w/2, s.y);
-        ctx.lineTo(s.x+s.w, s.y+s.h);
-        ctx.closePath();
-        ctx.fill();
-      }
-
-      // Player
-      const p = state.player;
-      ctx.fillStyle = p.alive ? '#e67e22' : '#555';
-      ctx.fillRect(p.x, p.y, p.w, p.h);
-
-      ctx.restore();
-    });
-    drawHUD();
+    ctx.restore();
+    statusEl.textContent = `X: ${Math.floor(player.x)} Y: ${Math.floor(player.y)}`;
   }
 
-  let last = performance.now();
   function loop(now){
     const dt = Math.min(0.033, (now - last)/1000);
     last = now;
@@ -535,288 +123,16 @@
     render();
     requestAnimationFrame(loop);
   }
+
+  function resize(){
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+
+  window.addEventListener('resize', resize);
+  resize();
   requestAnimationFrame(loop);
-})();            
-(() => {
-  const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
-  const statusEl = document.getElementById('status');
-
-  // === Retro Sprite & Sound Assets (Base64) ===
-  const assets = {
-    player: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAoCAYAAACZo8g6AAA...", // Spieler-Sprite
-    enemy:  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABoAAAAeCAYAAACp6... ", // Gegner-Sprite
-    coin1:  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0N...", // Coin Frame 1
-    coin2:  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0N...", // Coin Frame 2
-    coin3:  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0N...", // Coin Frame 3
-    coin4:  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0N...", // Coin Frame 4
-    spike:  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0N...", // Spike-Sprite
-    lava1:  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0N...", // Lava Frame 1
-    lava2:  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0N...", // Lava Frame 2
-
-    sJump:  "data:audio/wav;base64,UklGRsQAAABXQVZFZm10IBAAAAABAAEA...", // Sprung-Sound
-    sCoin:  "data:audio/wav;base64,UklGRqIAAABXQVZFZm10IBAAAAABAAEA...", // Coin-Sound
-    sDie:   "data:audio/wav;base64,UklGRtIAAABXQVZFZm10IBAAAAABAAEA..."  // GameOver-Sound
-  };
-
-  // === Image Cache ===
-  const imgCache = {};
-  function loadImage(key){
-    return new Promise(res=>{
-      const img = new Image();
-      img.src = assets[key];
-      img.onload = ()=>res(img);
-    });
-  }
-
-  // === Audio Cache ===
-  const sndCache = {};
-  function playSound(key){
-    const a = new Audio(assets[key]);
-    a.volume = 0.5;
-    a.play().catch(()=>{});
-  }
-
-  // Preload Images (wird vor Start geladen)
-  Promise.all(Object.keys(assets)
-    .filter(k=>assets[k].startsWith("data:image"))
-    .map(k=>loadImage(k).then(img=>{imgCache[k]=img;}))
-  ).then(()=>{
-    initGame();
-  });
-function initGame(){
-    // === Welt-Parameter ===
-    const W = 900, H = 500;
-    const keys = new Set();
-    const press = k => keys.add(k);
-    const release = k => keys.delete(k);
-
-    // Touch-Buttons
-    for (const id of ['left','right','jump']){
-      const el = document.getElementById(id);
-      el.addEventListener('touchstart', e => { e.preventDefault(); press(id); }, {passive:false});
-      el.addEventListener('touchend',   e => { e.preventDefault(); release(id); }, {passive:false});
-    }
-    // Keyboard
-    window.addEventListener('keydown', e => {
-      const k = e.key.toLowerCase();
-      if (k === 'arrowleft' || k === 'a') press('left');
-      if (k === 'arrowright' || k === 'd') press('right');
-      if (k === ' ' || k === 'w' || k === 'arrowup') press('jump');
-    });
-    window.addEventListener('keyup', e => {
-      const k = e.key.toLowerCase();
-      if (k === 'arrowleft' || k === 'a') release('left');
-      if (k === 'arrowright' || k === 'd') release('right');
-      if (k === ' ' || k === 'w' || k === 'arrowup') release('jump');
-    });
-
-    // === Game State ===
-    const state = {
-      t: 0,
-      scrollX: 0,
-      score: 0,
-      coins: 0,
-      highscore: parseInt(localStorage.getItem('highscore') || '0'),
-      gravity: 900,
-      player: {x:100,y:0,w:32,h:48,vy:0,onGround:false,alive:true},
-      platforms: [],
-      coinsList: [],
-      enemies: [],
-      spikes: [],
-      lavas: []
-    };
-
-    // Plattformen (x,y,w,h)
-    state.platforms = [
-      {x:0, y:H-50, w:2000, h:50},
-      {x:200, y:350, w:120, h:20},
-      {x:400, y:300, w:120, h:20},
-      {x:650, y:250, w:120, h:20},
-      {x:900, y:200, w:120, h:20}
-    ];
-
-    // Coins
-    state.coinsList = [
-      {x:230, y:310},
-      {x:430, y:260},
-      {x:680, y:210}
-    ];
-
-    // Gegner
-    state.enemies = [
-      {x:500, y:H-98, dir:1, speed:50}
-    ];
-
-    // Spikes
-    state.spikes = [
-      {x:780, y:H-70}
-    ];
-
-    // Lava
-    state.lavas = [
-      {x:1100, y:H-50}
-    ];
-
-    // === Helper: Welt-Koordinaten auf Canvas skalieren ===
-    function withWorldTransform(drawFn){
-      const r = canvas.getBoundingClientRect();
-      const scale = Math.min(r.width / W, r.height / H);
-      const offX = Math.floor((r.width - W*scale)/2);
-      const offY = Math.floor((r.height - H*scale)/2);
-      ctx.save();
-      ctx.translate(offX, offY);
-      ctx.scale(scale, scale);
-      drawFn();
-      ctx.restore();
-    }
-
-    // === Update ===
-    function update(dt){
-      if (!state.player.alive) return;
-      state.t += dt;
-      const p = state.player;
-      const speed = 200;
-
-      // Bewegung
-      if (keys.has('right')) p.x += speed * dt;
-      if (keys.has('left'))  p.x -= speed * dt;
-
-      // Gravitation
-      p.vy += state.gravity * dt;
-      p.y += p.vy * dt;
-      p.onGround = false;
-
-      // Plattform-Kollision
-      for (const plat of state.platforms){
-        if (p.x < plat.x+plat.w && p.x+p.w > plat.x &&
-            p.y < plat.y+plat.h && p.y+p.h > plat.y){
-          if (p.vy > 0 && p.y+p.h - p.vy*dt <= plat.y){
-            p.y = plat.y - p.h;
-            p.vy = 0;
-            p.onGround = true;
-          }
-        }
-      }
-
-      // Springen
-      if (keys.has('jump') && p.onGround){
-        p.vy = -450;
-        playSound("sJump");
-      }
-
-      // Coins sammeln
-      for (let i=state.coinsList.length-1; i>=0; i--){
-        const c = state.coinsList[i];
-        if (Math.abs((p.x+p.w/2)-c.x) < 20 && Math.abs((p.y+p.h/2)-c.y) < 20){
-          state.coins++;
-          state.score += 10;
-          playSound("sCoin");
-          state.coinsList.splice(i,1);
-        }
-      }
-
-      // Gegner bewegen & Kollision
-      for (const e of state.enemies){
-        e.x += e.dir * e.speed * dt;
-        if (e.x < 480) e.dir = 1;
-        if (e.x > 560) e.dir = -1;
-        if (p.x < e.x+32 && p.x+p.w > e.x && p.y < e.y+32 && p.y+p.h > e.y){
-          state.player.alive = false;
-          playSound("sDie");
-        }
-      }
-
-      // Spikes
-      for (const s of state.spikes){
-        if (p.x < s.x+32 && p.x+p.w > s.x && p.y < s.y+32 && p.y+p.h > s.y){
-          state.player.alive = false;
-          playSound("sDie");
-        }
-      }
-
-      // Lava
-      for (const l of state.lavas){
-        if (p.x < l.x+32 && p.x+p.w > l.x && p.y < l.y+32 && p.y+p.h > l.y){
-          state.player.alive = false;
-          playSound("sDie");
-        }
-      }
-
-      // Kamera scroll
-      const camCenter = state.scrollX + W/2;
-      if (p.x > camCenter) state.scrollX = p.x - W/2;
-      if (p.x < state.scrollX + 50) state.scrollX = Math.max(0, p.x - 50);
-    }
-  // === Render ===
-    function render(){
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-      withWorldTransform(() => {
-        // Hintergrund
-        ctx.fillStyle = '#78c0ff';
-        ctx.fillRect(0,0,W,H);
-        ctx.fillStyle = '#87d37c';
-        ctx.fillRect(0, H*0.8, W, H*0.2);
-
-        ctx.save();
-        ctx.translate(-state.scrollX,0);
-
-        // Plattformen
-        ctx.fillStyle = '#2ecc71';
-        for (const plat of state.platforms){
-          ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
-        }
-
-        // Coins (animierte Frames)
-        const coinFrame = Math.floor(state.t * 8) % 4 + 1;
-        for (const c of state.coinsList){
-          ctx.drawImage(imgCache[`coin${coinFrame}`], c.x-16, c.y-16, 32, 32);
-        }
-
-        // Gegner (2-Frame-Animation)
-        const enemyFrame = Math.floor(state.t * 4) % 2;
-        for (const e of state.enemies){
-          ctx.drawImage(imgCache.enemy, e.x, e.y, 32, 32);
-          // wenn du willst: unterschiedliche Frames bei enemyFrame nutzen
-        }
-
-        // Spikes
-        for (const s of state.spikes){
-          ctx.drawImage(imgCache.spike, s.x, s.y, 32, 32);
-        }
-
-        // Lava (animiert)
-        const lavaFrame = Math.floor(state.t * 4) % 2 + 1;
-        for (const l of state.lavas){
-          ctx.drawImage(imgCache[`lava${lavaFrame}`], l.x, l.y, 32, 32);
-        }
-
-        // Player
-        if (state.player.alive){
-          ctx.drawImage(imgCache.player, state.player.x, state.player.y, state.player.w, state.player.h);
-        } else {
-          ctx.globalAlpha = 0.5;
-          ctx.drawImage(imgCache.player, state.player.x, state.player.y, state.player.w, state.player.h);
-          ctx.globalAlpha = 1;
-        }
-
-        ctx.restore();
-      });
-
-      // HUD
-      statusEl.textContent = `Score: ${state.score} | Coins: ${state.coins} | Highscore: ${state.highscore}`;
-    }
-
-    // === Loop ===
-    let last = performance.now();
-    function loop(now){
-      const dt = Math.min(0.033, (now - last)/1000);
-      last = now;
-      update(dt);
-      render();
-      requestAnimationFrame(loop);
-    }
-    requestAnimationFrame(loop);
-  } // end initGame
 })();
-</script>
+  </script>
+</body>
+</html>
